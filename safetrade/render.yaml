@@ -1,0 +1,82 @@
+# Render Blueprint - "Infrastructure as Code"
+# Faida kubwa ya kuandika hii kama code (badala ya kubofya-bofya kwenye
+# dashboard): siku ya kuhama AWS, faili hii inaeleza WAZI kila service
+# ulilokuwa nalo (web, worker, db, redis) - ni "checklist" ya moja kwa moja
+# ya kile kinachohitajika kuundwa upande wa AWS (ECS services + RDS +
+# ElastiCache), hakuna kitu kinachosahaulika.
+services:
+  - type: web
+    name: safetrade-web
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: safetrade-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: safetrade-redis
+          property: connectionString
+      - key: STORAGE_BACKEND
+        value: "s3"
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        value: "af-south-1"
+
+  - type: worker
+    name: safetrade-celery-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: "celery -A config worker -l info"
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: safetrade-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: safetrade-redis
+          property: connectionString
+
+  - type: worker
+    name: safetrade-celery-beat
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: "celery -A config beat -l info"
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: safetrade-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: safetrade-redis
+          property: connectionString
+
+databases:
+  - name: safetrade-db
+    plan: starter
+    postgresMajorVersion: "16"
+
+  - type: redis
+    name: safetrade-redis
+    plan: starter
+    ipAllowList: []
